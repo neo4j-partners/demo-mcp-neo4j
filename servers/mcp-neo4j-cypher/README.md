@@ -1,5 +1,32 @@
 # 🔍⁉️ Neo4j MCP Server
 
+## 📘 Databricks Apps Deployment
+
+**For deploying to Databricks Apps**, see the comprehensive guide:
+
+👉 **[GUIDE_DATABRICKS_APPS.md](./GUIDE_DATABRICKS_APPS.md)** - Complete guide covering:
+- Step-by-step deployment to Databricks Apps
+- Secret management with `valueFrom` approach
+- Lazy driver initialization (critical for Databricks)
+- Troubleshooting and common issues
+- Production-ready configuration examples
+
+**Quick Start for Databricks**:
+```bash
+# 1. Configure secret resources in Databricks UI (see guide for details)
+# 2. Deploy the server
+./deploy.sh
+
+# 3. Test the deployment
+uv run test_neo4j_tools.py
+```
+
+**Current Status**: ✅ Production Ready
+- App: https://mcp-neo4j-cypher-1098933906466604.4.azure.databricksapps.com
+- Tools: `get_neo4j_schema`, `read_neo4j_cypher`, `write_neo4j_cypher`
+
+---
+
 ## 🌟 Overview
 
 A Model Context Protocol (MCP) server implementation that provides database interaction and allows graph exploration capabilities through Neo4j. This server enables running Cypher graph queries, analyzing complex domain data, and automatically generating business insights that can be enhanced further with an application's analysis tools.
