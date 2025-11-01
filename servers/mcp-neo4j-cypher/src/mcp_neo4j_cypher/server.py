@@ -38,7 +38,10 @@ def _is_write_query(query: str) -> bool:
 
 
 def create_mcp_server(
-    neo4j_driver: AsyncDriver,
+    neo4j_uri: Optional[str] = None,
+    neo4j_username: Optional[str] = None,
+    neo4j_password: Optional[str] = None,
+    neo4j_driver: Optional[AsyncDriver] = None,
     database: str = "neo4j",
     namespace: str = "",
     read_timeout: int = 30,
@@ -46,12 +49,71 @@ def create_mcp_server(
     read_only: bool = False,
     config_sample_size: int = 1000,
 ) -> FastMCP:
+    """
+    Create MCP server with Neo4j integration.
+
+    Neo4j connection options (in order of precedence):
+    1. Provide neo4j_driver directly (pre-created AsyncDriver instance)
+    2. Provide neo4j_uri/username/password as parameters
+    3. Use environment variables: NEO4J_URI, NEO4J_USERNAME, NEO4J_PASSWORD (recommended for Databricks Apps)
+
+    The driver will be created lazily on first tool use.
+    For Databricks Apps, credentials should be provided via Databricks secrets as environment variables.
+    """
     mcp: FastMCP = FastMCP(
-        "mcp-neo4j-cypher", dependencies=["neo4j", "pydantic"], stateless_http=True
+        "mcp-neo4j-cypher", dependencies=["neo4j", "pydantic"]
     )
 
     namespace_prefix = _format_namespace(namespace)
     allow_writes = not read_only
+
+    # Lazy driver initialization
+    _driver: Optional[AsyncDriver] = neo4j_driver
+
+    def get_driver() -> AsyncDriver:
+        """Get or create the Neo4j driver lazily from environment variables or parameters"""
+        nonlocal _driver
+        if _driver is None:
+            import os
+
+            # Priority order: environment variables > function parameters > error
+            uri = os.getenv("NEO4J_URI")
+            username = os.getenv("NEO4J_USERNAME")
+            password = os.getenv("NEO4J_PASSWORD")
+
+            # Fall back to parameters if env vars not set
+            if not uri and neo4j_uri:
+                uri = neo4j_uri
+            if not username and neo4j_username:
+                username = neo4j_username
+            if not password and neo4j_password:
+                password = neo4j_password
+
+            # Validate we have all credentials
+            if not uri or not username or not password:
+                missing = []
+                if not uri: missing.append("NEO4J_URI")
+                if not username: missing.append("NEO4J_USERNAME")
+                if not password: missing.append("NEO4J_PASSWORD")
+
+                env_check = {
+                    "NEO4J_URI": os.getenv("NEO4J_URI"),
+                    "NEO4J_USERNAME": os.getenv("NEO4J_USERNAME"),
+                    "NEO4J_PASSWORD": "***" if os.getenv("NEO4J_PASSWORD") else None,
+                }
+                logger.error(f"Environment variables at driver creation: {env_check}")
+
+                raise ValueError(
+                    f"Missing Neo4j credentials: {', '.join(missing)}. "
+                    f"Environment check: {env_check}. "
+                    "Provide via NEO4J_URI/USERNAME/PASSWORD environment variables "
+                    "or create_mcp_server() parameters."
+                )
+
+            logger.info(f"Creating Neo4j driver lazily to {uri}")
+            _driver = AsyncGraphDatabase.driver(uri, auth=(username, password))
+
+        return _driver
 
     @mcp.tool(
         name=namespace_prefix + "get_neo4j_schema",
@@ -144,7 +206,7 @@ def create_mcp_server(
             return cleaned
 
         try:
-            results_json = await neo4j_driver.execute_query(
+            results_json = await get_driver().execute_query(
                 get_schema_query,
                 routing_control=RoutingControl.READ,
                 database_=database,
@@ -197,7 +259,7 @@ def create_mcp_server(
 
         try:
             query_obj = Query(query, timeout=float(read_timeout))
-            results = await neo4j_driver.execute_query(
+            results = await get_driver().execute_query(
                 query_obj,
                 parameters_=params,
                 routing_control=RoutingControl.READ,
@@ -246,7 +308,7 @@ def create_mcp_server(
             raise ValueError("Only write queries are allowed for write-query")
 
         try:
-            _, summary, _ = await neo4j_driver.execute_query(
+            _, summary, _ = await get_driver().execute_query(
                 query,
                 parameters_=params,
                 routing_control=RoutingControl.WRITE,

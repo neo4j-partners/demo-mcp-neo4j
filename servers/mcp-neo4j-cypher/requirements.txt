@@ -1,0 +1,9 @@
+# Requirements for Databricks Apps deployment
+# Direct pip install approach (uv has compatibility issues in Databricks Apps environment)
+
+databricks-sdk>=0.43.0
+fastmcp>=2.10.5
+neo4j>=5.26.0
+pydantic>=2.10.1
+tiktoken>=0.11.0
+uvicorn>=0.38.0

@@ -1,0 +1,88 @@
+# Databricks App Configuration for MCP Neo4j Cypher Server
+#
+# Uses direct pip install approach (uv has compatibility issues in Databricks Apps)
+# Reference: https://learn.microsoft.com/en-us/azure/databricks/generative-ai/mcp/custom-mcp
+
+command:
+  - "sh"
+  - "-c"
+  - "pip install -q -r requirements.txt && python production_server.py"
+
+env:
+  # ============================================================================
+  # Neo4j Connection Configuration
+  # ============================================================================
+  # Using valueFrom for secrets (references UI-configured resources)
+  # Hardcoded values for non-sensitive configuration
+
+  # Non-sensitive values (hardcoded - no credentials exposed)
+  - name: NEO4J_URI
+    value: "neo4j+s://3f1f827a.databases.neo4j.io"
+
+  - name: NEO4J_DATABASE
+    value: "neo4j"
+
+  # Sensitive values (via Databricks App Resources configured in UI)
+  # These reference resources added via Databricks UI: Apps -> mcp-neo4j-cypher -> Add resource
+  - name: NEO4J_USERNAME
+    valueFrom: NEO4J_USERNAME
+
+  - name: NEO4J_PASSWORD
+    valueFrom: NEO4J_PASSWORD
+
+  # ============================================================================
+  # MCP Server Configuration (HTTP Transport for Databricks)
+  # ============================================================================
+
+  # CRITICAL: Databricks Apps expects DATABRICKS_APP_PORT
+  - name: DATABRICKS_APP_PORT
+    value: "8000"
+
+  # Also set PORT for compatibility (our code reads this)
+  - name: PORT
+    value: "8000"
+
+  - name: NEO4J_TRANSPORT
+    value: "http"
+
+  - name: NEO4J_MCP_SERVER_HOST
+    value: "0.0.0.0"
+
+  - name: NEO4J_MCP_SERVER_PORT
+    value: "8000"
+
+  - name: NEO4J_MCP_SERVER_PATH
+    value: "/mcp/"
+
+  # ============================================================================
+  # Security and Performance Settings
+  # ============================================================================
+
+  # Allowed hosts for DNS rebinding protection
+  # Using "*" for Databricks Apps compatibility
+  - name: NEO4J_MCP_SERVER_ALLOWED_HOSTS
+    value: "*"
+
+  # CORS origins - allow all for Databricks workspace access
+  - name: NEO4J_MCP_SERVER_ALLOW_ORIGINS
+    value: "*"
+
+  # Read-only mode (uncomment to enable)
+  # - name: NEO4J_READ_ONLY
+  #   value: "false"
+
+  # Query timeout in seconds (default: 30)
+  # - name: NEO4J_READ_TIMEOUT
+  #   value: "30"
+
+  # Response token limit (optional, limits response size)
+  # - name: NEO4J_RESPONSE_TOKEN_LIMIT
+  #   value: "4000"
+
+  # Schema sample size (default: 1000)
+  # - name: NEO4J_SCHEMA_SAMPLE_SIZE
+  #   value: "1000"
+
+  # Tool namespace prefix (optional)
+  # - name: NEO4J_NAMESPACE
+  #   value: "neo4j"

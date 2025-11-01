@@ -22,7 +22,10 @@ dev-dependencies = [
     "pytest-asyncio>=0.20.3",
     "ruff>=0.11.5",
     "testcontainers[neo4j]>=4.10.0",
-    "aiohttp>=3.8.0"
+    "aiohttp>=3.8.0",
+    "databricks-sdk>=0.71.0",
+    "databricks-mcp>=0.4.0",
+    "mcp>=1.20.0",
 ]
 
 [project.scripts]
