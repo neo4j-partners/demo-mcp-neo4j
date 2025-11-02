@@ -148,30 +148,46 @@ print(len(password))  # Should be ~40 characters for actual password
 
 **The Solution - valueFrom with UI Resources**:
 
-Databricks Apps requires a two-step process:
+Databricks Apps requires a three-step process:
 
-**Step 1: Configure Resources in Databricks UI**
+**Step 0: Create Databricks Secrets via CLI** (one-time setup)
 
-1. Navigate to: Databricks Workspace → **Apps** → **mcp-neo4j-cypher**
-2. Click: **"+ Add resource"**
-3. Configure secret resource:
+```bash
+# Create the secret scope
+databricks secrets create-scope mcp-neo4j-cypher
+
+# Store the actual secret values
+databricks secrets put-secret mcp-neo4j-cypher username --string-value "neo4j"
+databricks secrets put-secret mcp-neo4j-cypher password --string-value "your-password"
+```
+
+**Step 1: Configure App Resources in Databricks UI**
+
+**IMPORTANT**: This links the Databricks secrets to your app. This MUST be done through the UI.
+
+1. Navigate to: **Compute** → **Apps** → **mcp-neo4j-cypher**
+2. Click: **"Edit app"** (top right)
+3. Go to step: **"2 Configure"**
+4. Scroll to: **"App resources"** section
+5. Click: **"+ Add resource"**
+6. Configure each secret resource:
    - **Resource type**: Secret
-   - **Secret scope**: `mcp-neo4j-cypher` (or your scope name)
-   - **Secret key**: `username` (the key in the secret scope)
-   - **Resource key**: `NEO4J_USERNAME` (what you'll reference in app.yaml)
+   - **Secret scope**: `mcp-neo4j-cypher` (the scope created via CLI)
+   - **Secret key**: `username` or `password` (the key in the Databricks secret scope)
+   - **Resource key**: `NEO4J_USERNAME` or `NEO4J_PASSWORD` (what you'll reference in app.yaml)
    - **Permission**: Can read
-4. Repeat for each secret (username, password, etc.)
+7. Repeat for each secret (username, password, etc.)
 
-**Step 2: Use valueFrom in app.yaml**
+**Step 2: Reference Resources in app.yaml with valueFrom**
 
 ```yaml
 env:
   # ✅ WORKS - References UI-configured resource
   - name: NEO4J_USERNAME
-    valueFrom: NEO4J_USERNAME  # References the resource key from UI
+    valueFrom: NEO4J_USERNAME  # Must match the "Resource key" from UI
 
   - name: NEO4J_PASSWORD
-    valueFrom: NEO4J_PASSWORD  # References the resource key from UI
+    valueFrom: NEO4J_PASSWORD  # Must match the "Resource key" from UI
 ```
 
 **Hardcode Non-Sensitive Values**:
@@ -192,6 +208,43 @@ env:
 - The resource must be configured in the UI first (can't be done via app.yaml alone)
 - Non-sensitive config (URI, database name) can be hardcoded for simplicity
 - This is the official Microsoft-documented approach for Databricks Apps
+
+**How the Pieces Connect**:
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│ 1. Databricks CLI (stores actual secrets)                          │
+│    databricks secrets put-secret mcp-neo4j-cypher password          │
+│                                  └─────┬─────┘ └────┬────┘          │
+│                                   Scope Name    Secret Key          │
+└─────────────────────────────────────────────────────────────────────┘
+                                   ↓
+┌─────────────────────────────────────────────────────────────────────┐
+│ 2. Databricks UI > Edit App > App Resources                        │
+│    [+ Add resource]                                                 │
+│    • Secret scope: mcp-neo4j-cypher     ← Links to CLI scope       │
+│    • Secret key: password                ← Links to CLI secret key │
+│    • Resource key: NEO4J_PASSWORD        ← Your custom identifier  │
+└─────────────────────────────────────────────────────────────────────┘
+                                   ↓
+┌─────────────────────────────────────────────────────────────────────┐
+│ 3. app.yaml (references the resource)                              │
+│    env:                                                             │
+│      - name: NEO4J_PASSWORD                                         │
+│        valueFrom: NEO4J_PASSWORD  ← Must match "Resource key"      │
+└─────────────────────────────────────────────────────────────────────┘
+                                   ↓
+┌─────────────────────────────────────────────────────────────────────┐
+│ 4. Python Code (reads from environment)                            │
+│    password = os.getenv("NEO4J_PASSWORD")  ← Gets actual value     │
+└─────────────────────────────────────────────────────────────────────┘
+```
+
+**Key Relationships**:
+- **CLI Secret Scope** → **UI Secret Scope**: Must match exactly
+- **CLI Secret Key** → **UI Secret Key**: Must match exactly
+- **UI Resource Key** → **app.yaml valueFrom**: Must match exactly
+- **app.yaml env name** → **Python os.getenv()**: Must match exactly
 
 ---
 
@@ -485,26 +538,47 @@ Or use the automated `deploy.sh` script which reads from `neo4j_auth.txt`:
 
 **CRITICAL**: This step MUST be done via the UI. It cannot be automated via app.yaml.
 
+**Workflow Overview**:
+1. First, create secrets using Databricks CLI (see step 2 above)
+2. Then, add App Resources in the UI to link those secrets to your app
+3. The "Resource key" you define in the UI is what you'll reference in `app.yaml` using `valueFrom`
+
+**Detailed Steps**:
+
 1. Open Databricks workspace
-2. Navigate to: **Apps** → **mcp-neo4j-cypher**
-3. Scroll to **Resources** section
-4. Click **"+ Add resource"**
+2. Navigate to: **Compute** → **Apps** → **mcp-neo4j-cypher**
+3. Click **"Edit app"** (top right)
+4. Go to step **"2 Configure"**
+5. Scroll to **"App resources"** section
+6. Click **"+ Add resource"**
 
-**For Username**:
-- Resource type: **Secret**
-- Secret scope: **mcp-neo4j-cypher** (or your scope)
-- Secret key: **username** (key in the secret scope)
-- Resource key: **NEO4J_USERNAME** (what you reference in app.yaml)
-- Permission: **Can read**
-- Click **Save**
+**For Password Resource**:
+- **Resource type**: Secret
+- **Secret scope**: `mcp-neo4j-cypher` (the scope you created via CLI)
+- **Secret key**: `password` (the key in the Databricks secret scope - from CLI step)
+- **Resource key**: `NEO4J_PASSWORD` (what you'll reference in app.yaml with valueFrom)
+- **Permission**: Can read (or Can manage)
+- Click **Add** or **Save**
 
-**For Password**:
-- Resource type: **Secret**
-- Secret scope: **mcp-neo4j-cypher**
-- Secret key: **password**
-- Resource key: **NEO4J_PASSWORD**
-- Permission: **Can read**
-- Click **Save**
+**For Username Resource**:
+- **Resource type**: Secret
+- **Secret scope**: `mcp-neo4j-cypher`
+- **Secret key**: `username` (the key in the Databricks secret scope - from CLI step)
+- **Resource key**: `NEO4J_USERNAME` (what you'll reference in app.yaml with valueFrom)
+- **Permission**: Can read (or Can manage)
+- Click **Add** or **Save**
+
+**Understanding the Fields**:
+- **Secret scope**: The Databricks secret scope created with `databricks secrets create-scope`
+- **Secret key**: The key used when storing the secret with `databricks secrets put-secret`
+- **Resource key**: The identifier you use in `app.yaml` with `valueFrom: RESOURCE_KEY`
+- **Permission**: Access level for the app's service principal to read the secret
+
+**After Adding Resources**:
+You should see both resources listed in the "App resources" section showing:
+- Secret: neo4j-... (scope prefix)
+- Permission: Can read/manage
+- Resource key: NEO4J_PASSWORD and NEO4J_USERNAME
 
 #### 4. Update app.yaml to Use valueFrom
 
